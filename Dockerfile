@@ -4,11 +4,10 @@ EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080
 
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-WORKDIR /src/Lumen.API
-COPY ["Lumen.API.csproj", "."]
-RUN dotnet restore
+WORKDIR /src
 COPY . .
-RUN dotnet publish -c Release -o /app/publish
+RUN dotnet restore "Lumen.API.csproj"
+RUN dotnet publish "Lumen.API.csproj" -c Release -o /app/publish
 
 FROM base AS final
 WORKDIR /app
