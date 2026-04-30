@@ -113,3 +113,4 @@ C:\Users\pastu\Downloads\Lumen_Backend\Lumen.API\obj\Debug\net8.0\refint\Lumen.A
 C:\Users\pastu\Downloads\Lumen_Backend\Lumen.API\obj\Debug\net8.0\Lumen.API.pdb
 C:\Users\pastu\Downloads\Lumen_Backend\Lumen.API\obj\Debug\net8.0\Lumen.API.genruntimeconfig.cache
 C:\Users\pastu\Downloads\Lumen_Backend\Lumen.API\obj\Debug\net8.0\ref\Lumen.API.dll
+C:\Users\pastu\Downloads\Lumen_Backend\Lumen.API\obj\Debug\net8.0\Lumen.API.sourcelink.json
