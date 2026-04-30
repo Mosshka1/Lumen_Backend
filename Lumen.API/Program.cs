@@ -11,12 +11,39 @@ using Microsoft.OpenApi.Models;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Database ──────────────────────────────────────────────────────────────────
+var rawConnectionString =
+    Environment.GetEnvironmentVariable("DATABASE_URL") ??
+    Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection") ??
+    builder.Configuration.GetConnectionString("DefaultConnection") ?? "";
+
+string connectionString;
+if (rawConnectionString.StartsWith("postgresql://") ||
+    rawConnectionString.StartsWith("postgres://"))
+{
+    var uri = new Uri(rawConnectionString);
+    var userInfo = uri.UserInfo.Split(':');
+    connectionString = $"Host={uri.Host};Port={uri.Port};" +
+                       $"Database={uri.AbsolutePath.TrimStart('/')};" +
+                       $"Username={userInfo[0]};Password={userInfo[1]};" +
+                       $"SSL Mode=Require;Trust Server Certificate=true";
+}
+else
+{
+    connectionString = rawConnectionString;
+}
+
 builder.Services.AddDbContext<AppDbContext>(opt =>
-    opt.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    opt.UseNpgsql(connectionString));
 
 // ── JWT Authentication ────────────────────────────────────────────────────────
 var jwt = builder.Configuration.GetSection("JwtSettings");
-var key = Encoding.UTF8.GetBytes(jwt["SecretKey"]!);
+
+var secretKey =
+    Environment.GetEnvironmentVariable("JWT__SecretKey") ??
+    jwt["SecretKey"] ??
+    "DefaultDevKey12345678901234567890!!";
+
+var key = Encoding.UTF8.GetBytes(secretKey);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>
@@ -27,8 +54,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience         = true,
             ValidateLifetime         = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer              = jwt["Issuer"],
-            ValidAudience            = jwt["Audience"],
+            ValidIssuer              = Environment.GetEnvironmentVariable("JWT__Issuer")
+                                       ?? jwt["Issuer"],
+            ValidAudience            = Environment.GetEnvironmentVariable("JWT__Audience")
+                                       ?? jwt["Audience"],
             IssuerSigningKey         = new SymmetricSecurityKey(key)
         };
     });
@@ -52,7 +81,6 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Lumen API", Version = "v1" });
-
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name         = "Authorization",
@@ -61,7 +89,6 @@ builder.Services.AddSwaggerGen(c =>
         BearerFormat = "JWT",
         In           = ParameterLocation.Header
     });
-
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
@@ -78,7 +105,7 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// ── CORS (for dev) ────────────────────────────────────────────────────────────
+// ── CORS ──────────────────────────────────────────────────────────────────────
 builder.Services.AddCors(opt =>
     opt.AddDefaultPolicy(p =>
         p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
@@ -88,11 +115,9 @@ var app = builder.Build();
 // ── Middleware pipeline ───────────────────────────────────────────────────────
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+// Swagger доступний завжди (для тестування на Render)
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseCors();
 app.UseAuthentication();
@@ -105,4 +130,7 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
 }
-app.Run("http://0.0.0.0:5000");
+
+// ── Run ───────────────────────────────────────────────────────────────────────
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+app.Run($"http://0.0.0.0:{port}");
