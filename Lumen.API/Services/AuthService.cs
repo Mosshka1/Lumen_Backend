@@ -83,30 +83,42 @@ public class AuthService : IAuthService
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private string GenerateToken(User user)
+{
+    var jwt = _config.GetSection("JwtSettings");
+
+    var secretKey =
+        Environment.GetEnvironmentVariable("JWT__SecretKey") ??
+        jwt["SecretKey"] ??
+        "DefaultDevKey12345678901234567890!!";
+
+    var key     = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
+    var creds   = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+    var expires = DateTime.UtcNow.AddMinutes(
+        double.Parse(
+            Environment.GetEnvironmentVariable("JWT__ExpiresInMinutes") ??
+            jwt["ExpiresInMinutes"] ??
+            "1440"));
+
+    var issuer   = Environment.GetEnvironmentVariable("JWT__Issuer")   ?? jwt["Issuer"];
+    var audience = Environment.GetEnvironmentVariable("JWT__Audience") ?? jwt["Audience"];
+
+    var claims = new[]
     {
-        var jwt      = _config.GetSection("JwtSettings");
-        var key      = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt["SecretKey"]!));
-        var creds    = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-        var expires  = DateTime.UtcNow.AddMinutes(double.Parse(jwt["ExpiresInMinutes"]!));
+        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+        new Claim(ClaimTypes.Email, user.Login),
+        new Claim(ClaimTypes.Name, user.Login)
+    };
 
-        var claims = new[]
-        {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Email, user.Email),
-            new Claim(ClaimTypes.Name, user.Login)
-        };
+    var token = new JwtSecurityToken(
+        issuer:             issuer,
+        audience:           audience,
+        claims:             claims,
+        expires:            expires,
+        signingCredentials: creds
+    );
 
-        var token = new JwtSecurityToken(
-            issuer:             jwt["Issuer"],
-            audience:           jwt["Audience"],
-            claims:             claims,
-            expires:            expires,
-            signingCredentials: creds
-        );
-
-        return new JwtSecurityTokenHandler().WriteToken(token);
-    }
-
+    return new JwtSecurityTokenHandler().WriteToken(token);
+}
     private static UserDto MapToDto(User user) => new(
         user.Id,
         user.Login,
