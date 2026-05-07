@@ -42,14 +42,25 @@ public class ConnectionService : IConnectionService
         if (partner.ConnectionId.HasValue)
             throw new InvalidOperationException("This user is already in a pair.");
 
-        // Create a shared connection
-        var connection = new Connection();
-        _db.Connections.Add(connection);
-        await _db.SaveChangesAsync();
+        // Create a shared connection — з транзакцією
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var connection = new Connection();
+                _db.Connections.Add(connection);
+                await _db.SaveChangesAsync();
 
-        me.ConnectionId      = connection.Id;
-        partner.ConnectionId = connection.Id;
-        await _db.SaveChangesAsync();
+                me.ConnectionId      = connection.Id;
+                partner.ConnectionId = connection.Id;
+                await _db.SaveChangesAsync();
+
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
 
         return new PartnerDto(
             partner.Id,
